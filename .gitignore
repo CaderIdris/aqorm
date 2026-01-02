@@ -1,0 +1,10 @@
+**/*.egg-info/*
+**/*.ipynb_checkpoints/*
+*.bak
+build/
+dist/
+
+reports/*
+.coverage
+
+docs/
