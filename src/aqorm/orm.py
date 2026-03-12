@@ -8,13 +8,18 @@ from datetime import datetime
 from typing import Any, ClassVar
 
 from sqlalchemy import (
-    ForeignKeyConstraint,
+    ForeignKey,
     MetaData,
     UniqueConstraint
 )
 from sqlalchemy.engine.base import Engine
 from sqlalchemy.types import JSON
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    mapped_column,
+    relationship,
+)
 
 
 class _BaseV1(DeclarativeBase):
@@ -37,7 +42,8 @@ class DimDevice(_BaseV1):
 
     Schema
     ------
-    - *code* [str, pk]: The provided name for the sensor.
+    - *hash_device* [str, pk]: SHA256 hash of device name
+    - *code* [str, not null]: The provided name for the sensor.
     - *dataset* [str, not null]: Which dataset the sensor comes from.
     - *name* [str, unique, not null]: A more human readable name.
     - *short_name* [str, unique, not null]: A shorter name to use.
@@ -47,12 +53,13 @@ class DimDevice(_BaseV1):
 
     __tablename__ = "dim_device"
 
-    key: Mapped[str] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(nullable=False, unique=True)
-    short_name: Mapped[str] = mapped_column(nullable=False, unique=True)
-    dataset: Mapped[str] = mapped_column(nullable=False)
-    reference: Mapped[bool] = mapped_column(nullable=False)
-    other: Mapped[dict[str, Any]] = mapped_column(nullable=True)
+    hash_device: Mapped[str] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(unique=True)
+    name: Mapped[str] = mapped_column(unique=True)
+    short_name: Mapped[str] = mapped_column(unique=True)
+    dataset: Mapped[str]
+    reference: Mapped[bool]
+    other: Mapped[dict[str, Any] | None]
 
 
 class DimHeader(_BaseV1):
@@ -77,10 +84,11 @@ class DimHeader(_BaseV1):
 
     __tablename__ = "dim_header"
 
-    header: Mapped[str] = mapped_column(primary_key=True)
-    parameter: Mapped[str] = mapped_column(nullable=False)
-    unit: Mapped[str] = mapped_column(nullable=False)
-    other: Mapped[dict[str, Any]] = mapped_column(nullable=True)
+    hash_header: Mapped[str] = mapped_column(primary_key=True)
+    header: Mapped[str] = mapped_column(unique=True)
+    parameter: Mapped[str]
+    unit: Mapped[str]
+    other: Mapped[dict[str, Any] | None]
 
 class BridgeDeviceHeader(_BaseV1):
     """Declarative mapping of the headers corresponding to a device table.
@@ -113,27 +121,25 @@ class BridgeDeviceHeader(_BaseV1):
 
     Schema
     ------
-    - *device_key* [str, pk]: The device.
-    - *header* [str, pk]: The measurement header.
+    - *hash_device* [str, pk]: The SHA256 hash of the device name.
+    - *hash_header* [str, pk]: The SHA256 hash of the measurement header.
     - *flag* [str]: A flag associated with the header.
     """
 
     __tablename__ = "bridge_device_header"
 
-    device_key: Mapped[str] = mapped_column(primary_key=True)
-    header: Mapped[str] = mapped_column(primary_key=True)
-    flag: Mapped[str] = mapped_column(nullable=True)
-
-    __table_args__ = (
-        ForeignKeyConstraint(
-            ["device_key"],
-            ["dim_device.key"]
-        ),
-        ForeignKeyConstraint(
-            ["header"],
-            ["dim_header.header"]
-        )
+    hash_device: Mapped[str] = mapped_column(
+        ForeignKey("dim_device.hash_device"),
+        primary_key=True
     )
+    dim_device: Mapped["DimDevice"] = relationship()
+    hash_header: Mapped[str] = mapped_column(
+        ForeignKey("dim_header.hash_header"),
+        primary_key=True
+    )
+    dim_header: Mapped["DimHeader"] = relationship()
+    flag: Mapped[str | None]
+
 
 class DimUnitConversion(_BaseV1):
     """Declarative mapping of unit_conversion dimension table.
@@ -185,16 +191,14 @@ class FactMeasurement(_BaseV1):
     __tablename__ = "fact_measurement"
 
     time: Mapped[datetime] = mapped_column(primary_key=True)
-    device_key: Mapped[str] = mapped_column(primary_key=True)
-    measurements: Mapped[dict[str, Any]] = mapped_column(nullable=False)
-    flags: Mapped[dict[str, Any]] = mapped_column(nullable=True)
-    meta: Mapped[dict[str, Any]] = mapped_column(nullable=True)
-    __table_args__ = (
-        ForeignKeyConstraint(
-            ["device_key"],
-            ["dim_device.key"]
-        ),
+    hash_device: Mapped[str] = mapped_column(
+        ForeignKey("dim_device.hash_device"),
+        primary_key=True
     )
+    dim_device: Mapped["DimDevice"] = relationship()
+    measurements: Mapped[dict[str, Any]]
+    flags: Mapped[dict[str, Any] | None]
+    meta: Mapped[dict[str, Any] | None]
 
 
 class DimColocation(_BaseV1):
@@ -218,21 +222,22 @@ class DimColocation(_BaseV1):
 
     __tablename__ = "dim_colocation"
 
-    device_key: Mapped[str] = mapped_column(primary_key=True)
-    other_key: Mapped[str] = mapped_column(primary_key=True)
+    hash_device: Mapped[str] = mapped_column(
+        ForeignKey("dim_device.hash_device"),
+        primary_key=True
+    )
+    hash_other_device: Mapped[str] = mapped_column(
+        ForeignKey("dim_device.hash_device"),
+        primary_key=True
+    )
+    dim_device: Mapped["DimDevice"] = relationship(
+        foreign_keys=[hash_device]
+    )
+    dim_device_other: Mapped["DimDevice"] = relationship(
+        foreign_keys=[hash_other_device]
+    )
     start_date: Mapped[datetime] = mapped_column(primary_key=True)
     end_date: Mapped[datetime] = mapped_column(primary_key=True)
-
-    __table_args__ = (
-        ForeignKeyConstraint(
-            ["device_key"],
-            ["dim_device.key"]
-        ),
-        ForeignKeyConstraint(
-            ["other_key"],
-            ["dim_device.key"]
-        ),
-    )
 
 
 class MetaFilesProcessed(_BaseV1):

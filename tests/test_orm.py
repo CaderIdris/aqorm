@@ -1,4 +1,4 @@
-"""Tests the orm.py module with a PostgreSQL db.
+"""Tests the orm.py module against multiple databases.
 
 Tests
 -----
@@ -34,6 +34,7 @@ Tests
     - Are bad foreign keys rejected?
 """
 import datetime as dt
+import hashlib
 from pathlib import Path
 import warnings
 
@@ -46,6 +47,10 @@ from aqorm import orm
 from aqorm import engine
 
 from conftest import DBs
+
+
+def hash_string(string: str) -> str:
+    return hashlib.sha256(string.encode()).hexdigest()
 
 
 @pytest.fixture(scope="session")
@@ -171,6 +176,7 @@ def test_dim_device(
     tests: dict[str, bool] = {}
     good_data = [
         {
+            "hash_device": hash_string("ANT_123456_TEST"),
             "key": "ANT_123456_TEST",
             "dataset": "test_TEST",
             "name": "Antwerp 1_TEST",
@@ -179,6 +185,7 @@ def test_dim_device(
             "other": {"key": "value"}
         },
         {
+            "hash_device": hash_string("ANT_123567_TEST"),
             "key": "ANT_123567_TEST",
             "dataset": "test_TEST",
             "name": "Antwerp 2_TEST",
@@ -187,6 +194,7 @@ def test_dim_device(
             "other": None
         },
         {
+            "hash_device": hash_string("ANT_131245_TEST"),
             "key": "ANT_131245_TEST",
             "dataset": "test_TEST",
             "name": "Antwerp 3_TEST",
@@ -195,6 +203,7 @@ def test_dim_device(
             "other": None
         },
         {
+            "hash_device": hash_string("ANT_R000_TEST"),
             "key": "ANT_R000_TEST",
             "dataset": "test_TEST",
             "name": "Antwerp Ref 1_TEST",
@@ -203,6 +212,7 @@ def test_dim_device(
             "other": {"key": "value"}
         },
         {
+            "hash_device": hash_string("ANT_R001_TEST"),
             "key": "ANT_R001_TEST",
             "dataset": "test_TEST",
             "name": "Antwerp Ref 2_TEST",
@@ -212,11 +222,11 @@ def test_dim_device(
         }
     ]
     expected_pks = (
-        ("ANT_123456_TEST",),
-        ("ANT_123567_TEST",),
-        ("ANT_131245_TEST",),
-        ("ANT_R000_TEST",),
-        ("ANT_R001_TEST",)
+        (hash_string("ANT_123456_TEST"),),
+        (hash_string("ANT_123567_TEST"),),
+        (hash_string("ANT_131245_TEST"),),
+        (hash_string("ANT_R000_TEST"),),
+        (hash_string("ANT_R001_TEST"),)
     )
     insert_statement = insert(orm.DimDevice)
     with db_engine.connect() as conn:
@@ -240,6 +250,7 @@ def test_dim_device(
 @pytest.mark.parametrize(
     "dupe_key",
     [
+        "hash_device",
         "key",
         "name",
         "short_name"
@@ -259,6 +270,7 @@ def test_dim_device_dupe(
 
 
     initial_value = {
+        "hash_device": hash_string(f"ANT_123461{dupe_key}_TEST"),
         "key": f"ANT_123461{dupe_key}_TEST",
         "name": f"Antwerp 6{dupe_key}_TEST",
         "short_name": f"A6{dupe_key}_TEST",
@@ -267,6 +279,7 @@ def test_dim_device_dupe(
         "other": {"key": "value"}
     }
     bad_example = {
+        "hash_device": hash_string("ANT_123460_TEST"),
         "key": "ANT_123460_TEST",
         "name": "Antwerp 5_TEST",
         "short_name": "A5_TEST",
@@ -302,6 +315,7 @@ def test_dim_device_dupe(
 @pytest.mark.parametrize(
     "null_key",
     [
+        "hash_device",
         "key",
         "name",
         "short_name",
@@ -321,6 +335,7 @@ def test_dim_device_null(
     if db_engine is None:
         pytest.skip()
     bad_example = {
+        "hash_device": hash_string("ANT_123460_TEST"),
         "key": "ANT_123460_TEST",
         "name": "Antwerp 5_TEST",
         "short_name": "A5_TEST",
@@ -363,18 +378,21 @@ def test_dim_header_good(
     tests: dict[str, bool] = {}
     good_data: list[dict[str, str | None | dict[str, str]]] = [
         {
+            "hash_header": hash_string("ox_test"),
             "header": "ox_test",
             "parameter": "ox",
             "unit": "nA",
             "other": None
         },
         {
+            "hash_header": hash_string("no_test"),
             "header": "no_test",
             "parameter": "no",
             "unit": "nA",
             "other": {"key": "value"}
         },
         {
+            "hash_header": hash_string("opc_test"),
             "header": "opc_test",
             "type": "OPC",
             "parameter": "pm2.5",
@@ -383,9 +401,9 @@ def test_dim_header_good(
         }
     ]
     expected_pks = (
-        ("ox_test",),
-        ("no_test",),
-        ("opc_test",)
+        (hash_string("ox_test"),),
+        (hash_string("no_test"),),
+        (hash_string("opc_test"),)
     )
     insert_statement = insert(orm.DimHeader)
     with db_engine.connect() as conn:
@@ -410,6 +428,7 @@ def test_dim_header_good(
 @pytest.mark.parametrize(
     "dupe_key",
     [
+        "hash_header",
         "header"
     ]
 )
@@ -425,12 +444,14 @@ def test_dim_header_dupe(
     if db_engine is None:
         pytest.skip()
     initial_value = {
-        "header": "no2_test",
+        "hash_header": hash_string(f"no2{dupe_key}_test"),
+        "header": f"no2{dupe_key}_test",
         "parameter": "no2",
         "unit": "nA",
         "other": None
     }
     bad_example = {
+        "hash_header": hash_string("nox_test"),
         "header": "nox_test",
         "parameter": "nox",
         "unit": "nA",
@@ -463,6 +484,7 @@ def test_dim_header_dupe(
 @pytest.mark.parametrize(
     "null_key",
     [
+        "hash_header",
         "header",
         "parameter",
         "unit"
@@ -480,6 +502,7 @@ def test_dim_header_null(
     if db_engine is None:
         pytest.skip()
     bad_example = {
+        "hash_header": hash_string("nox_test"),
         "header": "nox_test",
         "parameter": "nox",
         "unit": "nA",
@@ -519,6 +542,7 @@ def test_bridge_device_header(
     tests: dict[str, bool] = {}
     ddevice_prep = [
         {
+            "hash_device": hash_string("ANT_123456_TEST_BDH"),
             "key": "ANT_123456_TEST_BDH",
             "dataset": "test_TEST_BDH",
             "name": "Antwerp 1_TEST_BDH",
@@ -527,6 +551,7 @@ def test_bridge_device_header(
             "other": {"key": "value"}
         },
         {
+            "hash_device": hash_string("ANT_123567_TEST_BDH"),
             "key": "ANT_123567_TEST_BDH",
             "dataset": "test_TEST_BDH",
             "name": "Antwerp 2_TEST_BDH",
@@ -545,12 +570,14 @@ def test_bridge_device_header(
 
     dheader_prep: list[dict[str, str | None | dict[str, str]]] = [
         {
+            "hash_header": hash_string("ox_test_BDH"),
             "header": "ox_test_BDH",
             "parameter": "ox",
             "unit": "nA",
             "other": None
         },
         {
+            "hash_header": hash_string("no_test_BDH"),
             "header": "no_test_BDH",
             "parameter": "no",
             "unit": "nA",
@@ -567,25 +594,34 @@ def test_bridge_device_header(
 
     good_data: list[dict[str, str | None]] = [
         {
-            "device_key": "ANT_123456_TEST_BDH",
-            "header": "ox_test_BDH",
+            "hash_device": hash_string("ANT_123456_TEST_BDH"),
+            "hash_header": hash_string("ox_test_BDH"),
             "flag": "ox_test_BDH_flag"
         },
         {
-            "device_key": "ANT_123456_TEST_BDH",
-            "header": "no_test_BDH",
+            "hash_device": hash_string("ANT_123456_TEST_BDH"),
+            "hash_header": hash_string("no_test_BDH"),
             "flag": None
         },
         {
-            "device_key": "ANT_123567_TEST_BDH",
-            "header": "ox_test_BDH",
+            "hash_device": hash_string("ANT_123567_TEST_BDH"),
+            "hash_header": hash_string("ox_test_BDH"),
             "flag": None
         }
     ]
     expected_pks = (
-        ("ANT_123456_TEST_BDH", "ox_test_BDH"),
-        ("ANT_123456_TEST_BDH", "no_test_BDH"),
-        ("ANT_123567_TEST_BDH", "ox_test_BDH")
+        (
+            hash_string("ANT_123456_TEST_BDH"),
+            hash_string("ox_test_BDH"),
+        ),
+        (
+            hash_string("ANT_123456_TEST_BDH"),
+            hash_string("no_test_BDH"),
+        ),
+        (
+            hash_string("ANT_123567_TEST_BDH"),
+            hash_string("ox_test_BDH"),
+        )
     )
     insert_statement = insert(orm.BridgeDeviceHeader)
     with db_engine.connect() as conn:
@@ -621,6 +657,7 @@ def test_bridge_device_header_dupe(
 
     ddevice_prep = [
         {
+            "hash_device": hash_string("bdh_dupe_test"),
             "key": "bdh_dupe_test",
             "dataset": "test_TEST_BDH",
             "name": "bdh_dupe_test",
@@ -639,6 +676,7 @@ def test_bridge_device_header_dupe(
 
     dheader_prep: list[dict[str, str | None | dict[str, str]]] = [
         {
+            "hash_header": hash_string("bdh_dupe_test"),
             "header": "bdh_dupe_test",
             "parameter": "ox",
             "unit": "nA",
@@ -655,13 +693,13 @@ def test_bridge_device_header_dupe(
 
     ins_data = [
         {
-            "device_key": "bdh_dupe_test",
-            "header": "bdh_dupe_test",
+            "hash_device": hash_string("bdh_dupe_test"),
+            "hash_header": hash_string("bdh_dupe_test"),
             "flag": "ox_test_BDH_flag"
         },
         {
-            "device_key": "bdh_dupe_test",
-            "header": "bdh_dupe_test",
+            "hash_device": hash_string("bdh_dupe_test"),
+            "hash_header": hash_string("bdh_dupe_test"),
             "flag": "ox_test_BDH_flag"
         },
     ]
@@ -679,7 +717,7 @@ def test_bridge_device_header_dupe(
 @pytest.mark.orm
 @pytest.mark.base_v1
 @pytest.mark.parametrize("db", list(DBs))
-@pytest.mark.parametrize("col_to_null", ["device_key", "header"])
+@pytest.mark.parametrize("col_to_null", ["hash_device", "hash_header"])
 def test_bridge_device_header_null(
     db: DBs,
     violation_messages: dict[DBs, dict[str, str]],
@@ -694,6 +732,7 @@ def test_bridge_device_header_null(
 
     ddevice_prep = [
         {
+            "hash_device": hash_string(f"bdh_null_test_{col_to_null}"),
             "key": f"bdh_null_test_{col_to_null}",
             "dataset": f"test_TEST_BDH_{col_to_null}",
             "name": f"bdh_null_test_{col_to_null}",
@@ -712,6 +751,7 @@ def test_bridge_device_header_null(
 
     dheader_prep: list[dict[str, str | None | dict[str, str]]] = [
         {
+            "hash_header": hash_string(f"bdh_null_test_{col_to_null}"),
             "header": f"bdh_null_test_{col_to_null}",
             "parameter": "ox",
             "unit": "nA",
@@ -727,8 +767,8 @@ def test_bridge_device_header_null(
         conn.commit()
 
     ins_data = {
-        "device_key": f"bdh_null_test_{col_to_null}",
-        "header": f"bdh_null_test_{col_to_null}",
+        "hash_device": hash_string(f"bdh_null_test_{col_to_null}"),
+        "hash_header": hash_string(f"bdh_null_test_{col_to_null}"),
         "flag": None
     }
     ins_data[col_to_null] = None
@@ -750,7 +790,7 @@ def test_bridge_device_header_null(
 @pytest.mark.orm
 @pytest.mark.base_v1
 @pytest.mark.parametrize("db", list(DBs))
-@pytest.mark.parametrize("col_to_change", ["device_key", "header"])
+@pytest.mark.parametrize("col_to_change", ["hash_device", "hash_header"])
 def test_bridge_device_header_fkey(
     db: DBs,
     violation_messages: dict[DBs, dict[str, str]],
@@ -765,6 +805,7 @@ def test_bridge_device_header_fkey(
 
     ddevice_prep = [
         {
+            "hash_device": hash_string(f"bdh_fkey_test_{col_to_change}"),
             "key": f"bdh_fkey_test_{col_to_change}",
             "dataset": f"test_TEST_BDH_{col_to_change}",
             "name": f"bdh_fkey_test_{col_to_change}",
@@ -783,6 +824,7 @@ def test_bridge_device_header_fkey(
 
     dheader_prep: list[dict[str, str | None | dict[str, str]]] = [
         {
+            "hash_header": hash_string(f"bdh_fkey_test_{col_to_change}"),
             "header": f"bdh_fkey_test_{col_to_change}",
             "parameter": "ox",
             "unit": "nA",
@@ -798,8 +840,8 @@ def test_bridge_device_header_fkey(
         conn.commit()
 
     ins_data = {
-        "device_key": f"bdh_fkey_test_{col_to_change}",
-        "header": f"bdh_fkey_test_{col_to_change}",
+        "hash_device": hash_string(f"bdh_fkey_test_{col_to_change}"),
+        "hash_header": hash_string(f"bdh_fkey_test_{col_to_change}"),
         "flag": None
     }
     ins_data[col_to_change] = "BAD KEY"
@@ -983,6 +1025,7 @@ def test_dim_colocation(
 
     fkey_data = [
         {
+            "hash_device": hash_string("DIMCOLOC1"),
             "key": "DIMCOLOC1",
             "dataset": "test",
             "name": "DCOL 1",
@@ -991,6 +1034,7 @@ def test_dim_colocation(
             "other": {"key": "value"}
         },
         {
+            "hash_device": hash_string("DIMCOLOC2"),
             "key": "DIMCOLOC2",
             "dataset": "test",
             "name": "DCOL 2",
@@ -999,6 +1043,7 @@ def test_dim_colocation(
             "other": {"key": "value"}
         },
         {
+            "hash_device": hash_string("DIMCOLOC3"),
             "key": "DIMCOLOC3",
             "dataset": "test",
             "name": "DCOL 3",
@@ -1007,6 +1052,7 @@ def test_dim_colocation(
             "other": {"key": "value"}
         },
         {
+            "hash_device": hash_string("DIMCOLOC4"),
             "key": "DIMCOLOC4",
             "dataset": "test",
             "name": "DCOL 4",
@@ -1026,22 +1072,32 @@ def test_dim_colocation(
     tests: dict[str, bool] = {}
     good_data = [
         {
-            "device_key": "DIMCOLOC1",
-            "other_key": "DIMCOLOC2",
+            "hash_device": hash_string("DIMCOLOC1"),
+            "hash_other_device": hash_string("DIMCOLOC2"),
             "start_date": dt.datetime(2020, 1, 1),
             "end_date": dt.datetime(2020, 12, 1)
         },
         {
-            "device_key": "DIMCOLOC3",
-            "other_key": "DIMCOLOC4",
+            "hash_device": hash_string("DIMCOLOC3"),
+            "hash_other_device": hash_string("DIMCOLOC4"),
             "start_date": dt.datetime(2020, 1, 1),
             "end_date": dt.datetime(2020, 12, 1)
         },
     ]
 
     expected_pks = (
-        ("DIMCOLOC1", "DIMCOLOC2", dt.datetime(2020, 1, 1), dt.datetime(2020, 12, 1)),
-        ("DIMCOLOC3", "DIMCOLOC4", dt.datetime(2020, 1, 1), dt.datetime(2020, 12, 1)),
+        (
+            hash_string("DIMCOLOC1"),
+            hash_string("DIMCOLOC2"),
+            dt.datetime(2020, 1, 1),
+            dt.datetime(2020, 12, 1),
+        ),
+        (
+            hash_string("DIMCOLOC3"),
+            hash_string("DIMCOLOC4"),
+            dt.datetime(2020, 1, 1),
+            dt.datetime(2020, 12, 1),
+        ),
     )
     insert_statement = insert(orm.DimColocation)
     with db_engine.connect() as conn:
@@ -1076,6 +1132,7 @@ def test_dim_colocation_dupe(
 
     fkey_data = [
         {
+            "hash_device": hash_string("DIMCOLOC5"),
             "key": "DIMCOLOC5",
             "dataset": "test",
             "name": "DCOL 5",
@@ -1084,6 +1141,7 @@ def test_dim_colocation_dupe(
             "other": {"key": "value"}
         },
         {
+            "hash_device": hash_string("DIMCOLOC6"),
             "key": "DIMCOLOC6",
             "dataset": "test",
             "name": "DCOL 6",
@@ -1101,8 +1159,8 @@ def test_dim_colocation_dupe(
         conn.commit()
 
     example = {
-        "device_key": "DIMCOLOC5",
-        "other_key": "DIMCOLOC6",
+        "hash_device": hash_string("DIMCOLOC5"),
+        "hash_other_device": hash_string("DIMCOLOC6"),
         "start_date": dt.datetime(2020, 1, 1),
         "end_date": dt.datetime(2020, 12, 1)
     }
@@ -1131,8 +1189,8 @@ def test_dim_colocation_dupe(
 @pytest.mark.parametrize(
     "null_key",
     [
-        "device_key",
-        "other_key",
+        "hash_device",
+        "hash_other_device",
         "start_date",
         "end_date"
     ]
@@ -1151,6 +1209,7 @@ def test_dim_colocation_null(
 
     fkey_data = [
         {
+            "hash_device": hash_string(f"DIMCOLOC7{null_key}"),
             "key": f"DIMCOLOC7{null_key}",
             "dataset": "test",
             "name": f"DCOL 7{null_key}",
@@ -1159,6 +1218,7 @@ def test_dim_colocation_null(
             "other": {"key": "value"}
         },
         {
+            "hash_device": hash_string(f"DIMCOLOC8{null_key}"),
             "key": f"DIMCOLOC8{null_key}",
             "dataset": "test",
             "name": f"DCOL 8{null_key}",
@@ -1176,8 +1236,8 @@ def test_dim_colocation_null(
         conn.commit()
 
     bad_example = {
-        "device_key": f"DIMCOLOC7{null_key}",
-        "other_key": f"DIMCOLOC8{null_key}",
+        "hash_device": hash_string(f"DIMCOLOC7{null_key}"),
+        "hash_other_device": hash_string(f"DIMCOLOC8{null_key}"),
         "start_date": dt.datetime(2020, 1, 1),
         "end_date": dt.datetime(2020, 12, 1)
     }
@@ -1205,8 +1265,8 @@ def test_dim_colocation_null(
 @pytest.mark.parametrize(
     "bad_fkey",
     [
-        "device_key",
-        "other_key"
+        "hash_device",
+        "hash_other_device"
     ]
 )
 def test_dim_colocation_bad_fkey(
@@ -1223,6 +1283,7 @@ def test_dim_colocation_bad_fkey(
 
     fkey_data = [
         {
+            "hash_device": hash_string(f"DIMCOLOC9{bad_fkey}"),
             "key": f"DIMCOLOC9{bad_fkey}",
             "dataset": "test",
             "name": f"DCOL 9{bad_fkey}",
@@ -1231,6 +1292,7 @@ def test_dim_colocation_bad_fkey(
             "other": {"key": "value"}
         },
         {
+            "hash_device": hash_string(f"DIMCOLOC0{bad_fkey}"),
             "key": f"DIMCOLOC0{bad_fkey}",
             "dataset": "test",
             "name": f"DCOL 0{bad_fkey}",
@@ -1247,8 +1309,8 @@ def test_dim_colocation_bad_fkey(
         )
         conn.commit()
     bad_example = {
-        "device_key": f"DIMCOLOC9{bad_fkey}",
-        "other_key": f"DIMCOLOC0{bad_fkey}",
+        "hash_device": hash_string(f"DIMCOLOC9{bad_fkey}"),
+        "hash_other_device": hash_string(f"DIMCOLOC0{bad_fkey}"),
         "start_date": dt.datetime(2020, 1, 1),
         "end_date": dt.datetime(2020, 12, 1)
     }
@@ -1283,6 +1345,7 @@ def test_fact_measurement(
 
     fkey_data = [
         {
+            "hash_device": hash_string("FACTMEAS1"),
             "key": "FACTMEAS1",
             "dataset": "test",
             "name": "FMEAS 1",
@@ -1291,6 +1354,7 @@ def test_fact_measurement(
             "other": {"key": "value"}
         },
         {
+            "hash_device": hash_string("FACTMEAS2"),
             "key": "FACTMEAS2",
             "dataset": "test",
             "name": "FMEAS 2",
@@ -1311,14 +1375,14 @@ def test_fact_measurement(
     good_data = [
         {
             "time": dt.datetime(2020, 1, 1),
-            "device_key": "FACTMEAS1",
+            "hash_device": hash_string("FACTMEAS1"),
             "measurements": {"A": 1, "B": 2},
             "flags": {"A_flag": "Valid", "B_flag": "w"},
             "meta": None
         },
         {
             "time": dt.datetime(2020, 1, 2),
-            "device_key": "FACTMEAS2",
+            "hash_device": hash_string("FACTMEAS2"),
             "measurements": {"A": 1, "B": 2},
             "flags": None,
             "meta": {"A_meta": 1, "B_meta": 2}
@@ -1326,8 +1390,8 @@ def test_fact_measurement(
     ]
 
     expected_pks = (
-        (dt.datetime(2020, 1, 1), "FACTMEAS1"),
-        (dt.datetime(2020, 1, 2), "FACTMEAS2"),
+        (dt.datetime(2020, 1, 1), hash_string("FACTMEAS1")),
+        (dt.datetime(2020, 1, 2), hash_string("FACTMEAS2")),
     )
     insert_statement = insert(orm.FactMeasurement)
     with db_engine.connect() as conn:
@@ -1362,6 +1426,7 @@ def test_fact_measurement_dupe(
 
     fkey_data = [
         {
+            "hash_device": hash_string("FACTMEAS3"),
             "key": "FACTMEAS3",
             "dataset": "test",
             "name": "FMEAS 3",
@@ -1380,6 +1445,7 @@ def test_fact_measurement_dupe(
 
     example = {
         "time": dt.datetime(2020, 1, 3),
+        "hash_device": hash_string("FACTMEAS3"),
         "device_key": "FACTMEAS3",
         "measurements": {"A": 1, "B": 2},
         "flags": {"A_flag": "Valid", "B_flag": "w"}
@@ -1410,7 +1476,7 @@ def test_fact_measurement_dupe(
     "null_key",
     [
         "time",
-        "device_key",
+        "hash_device",
         "measurements"
     ]
 )
@@ -1428,6 +1494,7 @@ def test_fact_measurement_null(
 
     fkey_data = [
         {
+            "hash_device": hash_string(f"FACTMEAS4{null_key}"),
             "key": f"FACTMEAS4{null_key}",
             "dataset": "test",
             "name": f"FMEAS 4{null_key}",
@@ -1446,7 +1513,7 @@ def test_fact_measurement_null(
 
     bad_example = {
         "time": dt.datetime(2020, 1, 3),
-        "device_key": f"FACTMEAS3{null_key}",
+        "hash_device": hash_string(f"FACTMEAS5{null_key}"),
         "measurements": {"A": 1, "B": 2},
         "flags": {"A_flag": "Valid", "B_flag": "w"}
     }
@@ -1474,7 +1541,7 @@ def test_fact_measurement_null(
 @pytest.mark.parametrize(
     "bad_fkey",
     [
-        "device_key",
+        "hash_device",
     ]
 )
 def test_fact_measurement_bad_fkey(
@@ -1491,6 +1558,7 @@ def test_fact_measurement_bad_fkey(
 
     fkey_data = [
         {
+            "hash_device": hash_string(f"FACTMEAS5{bad_fkey}"),
             "key": f"FACTMEAS5{bad_fkey}",
             "dataset": "test",
             "name": f"FMEAS 5{bad_fkey}",
@@ -1508,7 +1576,7 @@ def test_fact_measurement_bad_fkey(
         conn.commit()
     bad_example = {
         "time": dt.datetime(2020, 1, 3),
-        "device_key": f"FACTMEAS5{bad_fkey}",
+        "hash_device": hash_string(f"FACTMEAS5{bad_fkey}"),
         "measurements": {"A": 1, "B": 2},
         "flags": {"A_flag": "Valid", "B_flag": "w"}
     }

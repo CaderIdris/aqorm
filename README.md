@@ -52,7 +52,7 @@ This table contains information relevant to each device.
 |key|VARCHAR|Y|Y|N|The key used for the device in the measurements table, used to relate the two tables|
 |name|VARCHAR|N|Y|N|The full name of the device|
 |short_name|VARCHAR|N|Y|N|A short name for the device, to be used in places such as graph axis labels where space is a premium|
-|dataset|VARCHAR|N|N|N|Which dataset the device came from, in the case of this pipeline it is always `senseurcity`|
+|dataset|VARCHAR|N|N|N|Which dataset the device came from|
 |reference|BOOLEAN|N|N|N|Will this device be used as a reference or reference equivalent device?|
 |other|JSON|N|N|Y|Any other information, stored as a json for flexibility|
 

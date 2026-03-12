@@ -53,6 +53,7 @@ def test_get_headers_from_device_parameters_good(
         device_name,
         parameters
     )
+    print(output)
     for k, v in expected_output.items():
         tests[f"{k} result valid"] = v == output.get(k, np.nan)
 

@@ -7,7 +7,7 @@ from typing import TypedDict
 
 from sqlalchemy import desc, func, MetaData, select
 from sqlalchemy.engine.base import Engine
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import aliased, Session
 
 from .metadata import get_schema_name
 from . import orm
@@ -40,6 +40,32 @@ class StrictOrientation(TypedDict):
     column_names: list[str]
 
 
+def check_for_table(name: str, schema: str, metadata: MetaData) -> None:
+    """Check if table exists.
+
+    Parameters
+    ----------
+    name : str
+        The name of the table.
+    schema : str
+        The schema the table should be in
+    metadata : MetaData
+        Metadata of database
+
+    Raises
+    ------
+    ValueError
+        Table not found
+
+    """
+    if f"{schema}.{name}" not in metadata.tables:
+        #INFO: Skipping this in coverage as it's effectively tested by
+        # previous check
+        msg = (
+            "dim_header table could not be found in "
+            f"{schema} schema."
+        )
+        raise ValueError(msg)
 
 
 def get_headers_from_device_parameters(
@@ -87,40 +113,35 @@ def get_headers_from_device_parameters(
     elif isinstance(parameters, Iterable):
         params = set(parameters)
 
-    if f"{schema_to_use}.bridge_device_header" not in metadata.tables:
-        msg = (
-            "bridge_device_header table could not be found in "
-            f"{schema_to_use} schema."
-        )
-        raise ValueError(msg)
-    bridge_device_header = orm.BridgeDeviceHeader
-
-    if f"{schema_to_use}.dim_header" not in metadata.tables: # pragma: no cover
-        #INFO: Skipping this in coverage as it's effectively tested by
-        # previous check
-        msg = (
-            "dim_header table could not be found in "
-            f"{schema_to_use} schema."
-        )
-        raise ValueError(msg)
+    check_for_table("dim_header", schema_to_use, metadata)
     dim_header = orm.DimHeader
+
+    check_for_table("dim_device", schema_to_use, metadata)
+    dim_device = orm.DimDevice
+
+    check_for_table("bridge_device_header", schema_to_use, metadata)
+    bridge_device_header = orm.BridgeDeviceHeader
 
     select_statement = (
         select(
             dim_header.parameter,
-            bridge_device_header.header
+            dim_header.header
+        )
+        .join(
+            bridge_device_header,
+            bridge_device_header.hash_header == dim_header.hash_header
+        )
+        .join(
+            dim_device,
+            bridge_device_header.hash_device == dim_device.hash_device
         )
         .where(
             dim_header.parameter.in_(params),
-            bridge_device_header.device_key == device
-        )
-        .outerjoin(
-            bridge_device_header,
-            bridge_device_header.header == dim_header.header
+            dim_device.key == device
         )
         .order_by(
-            desc(func.length(bridge_device_header.header)),
-            desc(bridge_device_header.header)
+            desc(func.length(dim_header.header)),
+            desc(dim_header.header)
         )
     )
     _logger.debug("%s", str(select_statement))
@@ -147,11 +168,11 @@ def get_headers_from_device_parameters(
                 device,
                 headers.get(param)
             )
-            _logger.debug(
-                "%s: %s",
-                param,
-                all_headers.get(param)
-            )
+        _logger.debug(
+            "%s: %s",
+            param,
+            all_headers.get(param)
+        )
 
     for param in params - set(headers.keys()):
         headers[param] = None
@@ -213,26 +234,16 @@ def get_measurements(
         time_end.strftime("%Y/%m/%d %H:%M:%S"),
     )
 
-    if f"{schema_to_use}.fact_measurement" not in metadata.tables:
-        msg = (
-            "fact_measurement table could not be found in "
-            f"{schema_to_use} schema."
-        )
-        raise ValueError(msg)
+    check_for_table("fact_measurement", schema_to_use, metadata)
     fact_measurement = orm.FactMeasurement
 
-    if (
-        f"{schema_to_use}.dim_colocation" not in metadata.tables and
-        colocated_with is not None
-    ): # pragma: no cover
-        #INFO: Skipping this in coverage as it's effectively tested by
-        # previous check
-        msg = (
-            "dim_colocation table could not be found in "
-            f"{schema_to_use} schema."
-        )
-        raise ValueError(msg)
+    if colocated_with is not None:
+        check_for_table("dim_colocation", schema_to_use, metadata)
     dim_colocation = orm.DimColocation
+
+    check_for_table("dim_device", schema_to_use, metadata)
+    dim_device = aliased(orm.DimDevice)
+    dim_device_other = aliased(orm.DimDevice)
 
     parameters = [
         fact_measurement.measurements[v].label(k)
@@ -240,7 +251,7 @@ def get_measurements(
     ]
     if colocated_with is not None:
         parameters.append(
-            dim_colocation.other_key.label("Colocator")
+            dim_device_other.name.label("Colocator")
         )
 
     select_stmt = (
@@ -248,8 +259,12 @@ def get_measurements(
             fact_measurement.time.label("Timestamp"),
             *parameters
         )
+        .join(
+            dim_device,
+            dim_device.hash_device == fact_measurement.hash_device
+        )
         .where(
-            fact_measurement.device_key == device,
+            dim_device.key == device,
             fact_measurement.time >= time_start,
             fact_measurement.time < time_end
         )
@@ -257,7 +272,6 @@ def get_measurements(
             fact_measurement.time
         )
     )
-
     if colocated_with is not None:
         if isinstance(colocated_with, str):
             colocated_devices = {colocated_with,}
@@ -267,10 +281,14 @@ def get_measurements(
             select_stmt
             .join(
                 dim_colocation,
-                dim_colocation.device_key == fact_measurement.device_key
+                dim_colocation.hash_device == fact_measurement.hash_device
+            )
+            .join(
+                dim_device_other,
+                dim_colocation.hash_other_device == dim_device_other.hash_device
             )
             .where(
-                dim_colocation.other_key.in_(colocated_devices),
+                dim_device_other.key.in_(colocated_devices),
                 fact_measurement.time >= dim_colocation.start_date,
                 fact_measurement.time < dim_colocation.end_date
             )
